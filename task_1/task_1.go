@@ -42,7 +42,7 @@ func (url *URLShortener) Get(urlsId string) string {
 		return value
 	}
 
-	return ""
+	return "error"
 }
 
 func (url *URLShortener) Delete(shortUrl string) error {
@@ -62,7 +62,6 @@ func main() {
 	// url2 := "https://www.youtube.com/shorts/IXdGMPGO0kk"
 	// urul3 := "https://mail.google.com/mail/u/0/?tab=rm&ogbl#inbox/FMfcgzQjggmmRTkQVnRPtwFVMwrjBFss"
 
-	shortId := constructor.Create(urL)
 	// shortId2 := constructor.Create(url2)
 	// shortId3 := constructor.Create(urul3)
 
@@ -89,6 +88,8 @@ func main() {
 	var choice int
 
 	for {
+		shortId := constructor.Create(urL)
+		fmt.Scan(&choice)
 		switch choice {
 		case 1:
 			fmt.Println(">", choice)
@@ -108,10 +109,6 @@ func main() {
 			return
 		}
 
-		fmt.Scan(&choice)
-
 	}
-
-	fmt.Println(constructor)
 
 }
