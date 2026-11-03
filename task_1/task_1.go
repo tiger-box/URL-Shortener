@@ -17,6 +17,10 @@ func NewURLShortener() *URLShortener {
 // https://example.com/some/long/path
 func (url *URLShortener) Create(urls string) string {
 
+	if len(urls) == 0 {
+		return "len 10"
+	}
+
 	//rand.Seed(time.Now().UnixNano())
 	// Этот не сам делал, а просто нашел на сайте,
 	// для генерации строки
@@ -30,19 +34,20 @@ func (url *URLShortener) Create(urls string) string {
 		bulder.WriteRune(chars[rand.IntN(len(chars))])
 	}
 
-	url.urls[bulder.String()] = urls
+	code := bulder.String()
+	url.urls[code] = urls
 
-	return bulder.String()
+	return code
 }
 
 func (url *URLShortener) Get(urlsId string) string {
 
 	value, ok := url.urls[urlsId]
-	if ok {
-		return value
+	if !ok {
+		return "short URL not found"
 	}
 
-	return "error"
+	return value
 }
 
 func (url *URLShortener) Delete(shortUrl string) error {
