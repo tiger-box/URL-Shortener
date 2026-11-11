@@ -5,20 +5,25 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
+	"sync"
 )
 
 type URLShortener struct {
-	Urls map[string]string
+	urls map[string]string
+	mu   sync.Mutex
 }
 
 func NewURLShortener() *URLShortener {
-	return &URLShortener{Urls: make(map[string]string)}
+	return &URLShortener{urls: make(map[string]string)}
 }
 
 // https://example.com/some/long/path
 func (s *URLShortener) Create(OriginalURL string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if len(OriginalURL) == 0 {
-		return "", fmt.Errorf("error:len url empty")
+		return "", fmt.Errorf("shortener: len url empty")
 	}
 
 	//rand.Seed(time.Now().UnixNano())
@@ -29,7 +34,6 @@ func (s *URLShortener) Create(OriginalURL string) (string, error) {
 		"0123456789")
 
 	var builder strings.Builder
-
 	code := builder.String()
 
 	for {
@@ -38,19 +42,20 @@ func (s *URLShortener) Create(OriginalURL string) (string, error) {
 		}
 
 		code = builder.String()
-
-		if _, exitsts := s.Urls[code]; !exitsts {
+		if _, exitsts := s.urls[code]; !exitsts {
 			break
 		}
 	}
 
-	s.Urls[code] = OriginalURL
-
+	s.urls[code] = OriginalURL
 	return code, nil
 }
 
 func (s *URLShortener) Get(urlsId string) (string, error) {
-	value, ok := s.Urls[urlsId]
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	value, ok := s.urls[urlsId]
 	if !ok {
 		return "", errors.New("short URL not found")
 	}
@@ -59,7 +64,10 @@ func (s *URLShortener) Get(urlsId string) (string, error) {
 }
 
 func (s *URLShortener) Delete(shortUrl string) error {
-	_, ok := s.Urls[shortUrl]
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, ok := s.urls[shortUrl]
 	if !ok {
 		// delete(url.urls, shortUrl)
 		// return nil
@@ -67,6 +75,6 @@ func (s *URLShortener) Delete(shortUrl string) error {
 		return errors.New("short URL not found")
 	}
 
-	delete(s.Urls, shortUrl)
+	delete(s.urls, shortUrl)
 	return nil
 }

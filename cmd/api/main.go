@@ -2,76 +2,25 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/tiger-box/URL-Shortener/internal"
+	"github.com/tiger-box/URL-Shortener/internal/handler"
 )
 
 func main() {
-
-	fmt.Println("Enter only the numbers 1 ... 4.")
-	fmt.Println("1. Create short URL")
-	fmt.Println("2. Get URL")
-	fmt.Println("3. Delete URL")
-	fmt.Println("4. Exit")
-
-	fmt.Println("==============")
-
-	var number int
-
 	shortener := internal.NewURLShortener()
+	urlHandler := handler.NewURL(shortener)
 
-	fmt.Println("number choice")
-	for {
-		fmt.Scan(&number)
-		switch number {
-		case 1:
-			var url string
-			fmt.Print("Enter url: ")
-			fmt.Scan(&url)
-			create, err := shortener.Create(url)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", handler.Health)
+	mux.HandleFunc("POST /shorten", urlHandler.GetShorter)
+	mux.HandleFunc("GET /{code}", urlHandler.GetURL)
 
-			if err != nil {
-				fmt.Println("error")
-				return
-			}
-
-			fmt.Println(create)
-
-		case 2:
-			fmt.Println("enter short url")
-
-			var id string
-			fmt.Scan(&id)
-			url, err := shortener.Get(id)
-
-			if err != nil {
-				fmt.Println("error")
-				return
-			}
-
-			fmt.Println(url)
-
-		case 3:
-			fmt.Println("enter short url")
-
-			var id string
-			fmt.Scan(&id)
-			err := shortener.Delete(id)
-
-			if err != nil {
-				fmt.Println("error")
-				return
-			}
-
-			fmt.Println("successfully deleted")
-
-		case 4:
-			fmt.Println("completed")
-			return
-		}
-
+	// Запускаем сервер на порту 8080
+	fmt.Println("Starting server at port 8080")
+	err := http.ListenAndServe(":8080", mux)
+	if err != nil {
+		fmt.Println("Error starting the server:", err)
 	}
-
-	//fmt.Println(shortener.Urls)
-
 }
