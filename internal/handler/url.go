@@ -2,6 +2,9 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 
@@ -10,10 +13,11 @@ import (
 
 type URL struct {
 	shortener *internal.URLShortener
+	logger    *slog.Logger
 }
 
-func NewURL(shortener *internal.URLShortener) *URL {
-	return &URL{shortener: shortener}
+func NewURL(shortener *internal.URLShortener, logger *slog.Logger) *URL {
+	return &URL{shortener: shortener, logger: logger}
 }
 
 type shorterRequest struct {
@@ -25,25 +29,31 @@ type shorterResponse struct {
 }
 
 func (h *URL) GetShorter(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var req shorterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "bad request")
+		h.logger.WarnContext(ctx, "bad request", "err", err)
 		return
 	}
 
-	url := parseURL(req.URL)
+	url, err := parseURL(req.URL)
 	if url == "" {
 		writeError(w, http.StatusBadRequest, "invalid URL")
+		h.logger.WarnContext(ctx, "bad request", "err", err)
 		return
 	}
 
 	short, err := h.shortener.Create(url)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal server error")
+		h.logger.ErrorContext(ctx, "failded create short url", "err", err)
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, shorterResponse{ShortURL: short})
+	h.logger.InfoContext(ctx, "short url created")
 }
 
 type urlResponse struct {
@@ -51,31 +61,41 @@ type urlResponse struct {
 }
 
 func (h *URL) GetURL(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var req shorterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "bad request")
+		h.logger.WarnContext(ctx, "bad request", "err", err)
+		return
+	}
 	code := r.PathValue("code")
 
 	if code == "" {
 		writeError(w, http.StatusBadRequest, "short url is required")
+		h.logger.WarnContext(ctx, "short url is empty")
 		return
 	}
 
 	url, err := h.shortener.Get(code)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "url not found")
+		h.logger.ErrorContext(ctx, "error url", "err", err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, urlResponse{URL: url})
 }
 
-func parseURL(rawURL string) string {
+func parseURL(rawURL string) (string, error) {
 	u, err := url.ParseRequestURI(rawURL)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("parse url: %w", err)
 	}
 
 	if u.Scheme == "" || u.Host == "" {
-		return ""
+		return "", errors.New("parse url: host or scheme is empty")
 	}
 
-	return u.String()
+	return u.String(), nil
 }
