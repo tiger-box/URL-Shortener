@@ -63,12 +63,6 @@ type urlResponse struct {
 func (h *URL) GetURL(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	var req shorterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad request")
-		h.logger.WarnContext(ctx, "bad request", "err", err)
-		return
-	}
 	code := r.PathValue("code")
 
 	if code == "" {

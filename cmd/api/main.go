@@ -29,7 +29,7 @@ func main() {
 	lvl.Set(cfg.LogLevel)
 
 	shortener := internal.NewURLShortener()
-	urlHandler := handler.NewURL(shortener)
+	urlHandler := handler.NewURL(shortener, logger)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handler.Health)
