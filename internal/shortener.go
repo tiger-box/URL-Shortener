@@ -33,10 +33,9 @@ func (s *URLShortener) Create(OriginalURL string) (string, error) {
 		"abcdefghijklmnopqrstuvwxyz" +
 		"0123456789")
 
-	var builder strings.Builder
-	code := builder.String()
-
+	var code string
 	for {
+		var builder strings.Builder
 		for i := 0; i < 5; i++ {
 			builder.WriteRune(chars[rand.IntN(len(chars))])
 		}
