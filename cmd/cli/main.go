@@ -22,7 +22,11 @@ func main() {
 
 	fmt.Println("number choice")
 	for {
-		fmt.Scan(&number)
+		if _, err := fmt.Scan(&number); err != nil {
+			fmt.Println("failed to add the number", err)
+			return
+		}
+
 		switch number {
 		case 1:
 			var url string
@@ -31,8 +35,8 @@ func main() {
 			create, err := shortener.Create(url)
 
 			if err != nil {
-				fmt.Println("error")
-				return
+				fmt.Println("error", err)
+				continue
 			}
 
 			fmt.Println(create)
@@ -45,8 +49,8 @@ func main() {
 			url, err := shortener.Get(id)
 
 			if err != nil {
-				fmt.Println("error")
-				return
+				fmt.Println("error", err)
+				continue
 			}
 
 			fmt.Println(url)
@@ -59,8 +63,8 @@ func main() {
 			err := shortener.Delete(id)
 
 			if err != nil {
-				fmt.Println("error")
-				return
+				fmt.Println("error", err)
+				continue
 			}
 
 			fmt.Println("successfully deleted")
@@ -68,8 +72,10 @@ func main() {
 		case 4:
 			fmt.Println("completed")
 			return
-		}
 
+		default:
+			fmt.Println("wrong number")
+		}
 	}
 
 	//fmt.Println(shortener.Urls)
