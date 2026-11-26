@@ -44,19 +44,25 @@ func main() {
 		WriteTimeout:      15 * time.Second,
 	}
 
+	serverErr := make(chan error, 1)
 	// Запускаем сервер на порту 8080
 	logger.Info("server starting", "addr", cfg.HTTPAddr)
 	go func() {
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("run failed", "err", err)
+			serverErr <- err
 		}
 	}()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
-	logger.Info("shutting down server")
 
+	select {
+	case err := <-serverErr:
+		logger.Error("run failed", "err", err)
+		os.Exit(1)
+	case <-stop:
+		logger.Info("shutting down server")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {

@@ -1,11 +1,12 @@
 package internal
 
 import (
-	"errors"
 	"fmt"
 	"math/rand/v2"
 	"strings"
 	"sync"
+
+	"github.com/tiger-box/URL-Shortener/internal/domain"
 )
 
 type URLShortener struct {
@@ -56,7 +57,7 @@ func (s *URLShortener) Get(urlsId string) (string, error) {
 
 	value, ok := s.urls[urlsId]
 	if !ok {
-		return "", errors.New("short URL not found")
+		return "", domain.ErrNotFound
 	}
 
 	return value, nil
@@ -71,7 +72,7 @@ func (s *URLShortener) Delete(shortUrl string) error {
 		// delete(url.urls, shortUrl)
 		// return nil
 
-		return errors.New("short URL not found")
+		return domain.ErrNotFound
 	}
 
 	delete(s.urls, shortUrl)
