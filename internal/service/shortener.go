@@ -14,9 +14,9 @@ import (
 )
 
 // repository — хранилище коротких ссылок (domain.URL), которое нужно сервису.
-// Save берёт ключ из u.Code; Get возвращает запись целиком.
-// Save возвращает domain.ErrAlreadyExists, если код занят;
-// Get и Delete возвращают domain.ErrNotFound, если кода нет.
+// Save сохраняет запись под ключом u.Code или возвращает domain.ErrAlreadyExists,
+// если код занят. Get возвращает запись целиком; Get и Delete возвращают
+// domain.ErrNotFound, если кода нет.
 type repository interface {
 	Save(ctx context.Context, u domain.URL) error
 	Get(ctx context.Context, code string) (domain.URL, error)

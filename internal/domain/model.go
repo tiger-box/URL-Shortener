@@ -12,7 +12,7 @@ type URL struct {
 
 var (
 	ErrNotFound      = errors.New("url not found")
-	ErrAlreadyExists = errors.New("url already exists")
+	ErrAlreadyExists = errors.New("code already exists")
 	ErrInvalidURL    = errors.New("invalid url")
 	ErrCodeConflict  = errors.New("could not find an available code")
 )
