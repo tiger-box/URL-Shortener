@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tiger-box/URL-Shortener/internal/domain"
+	"github.com/tiger-box/URL-Shortener/internal/repository/memory"
 	"github.com/tiger-box/URL-Shortener/internal/service"
 )
 
@@ -141,8 +142,6 @@ func TestShortener_CreateRetriesOnConflict(t *testing.T) {
 // ТЗ §7 + план 1.3: если свободный код не находится, Create не крутится вечно,
 // а сдаётся с domain.ErrCodeConflict.
 func TestShortener_CreateGivesUpOnEndlessConflict(t *testing.T) {
-	t.Skip("шаг 1.3: лимит попыток ещё не реализован — убрать Skip после 1.3")
-
 	repo := newFakeRepo()
 	repo.conflicts = 1 << 30 // склад всегда отвечает «занято»
 	s := service.NewShortener(repo)
@@ -167,6 +166,95 @@ func TestShortener_CreateGivesUpOnEndlessConflict(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Create did not give up on endless conflict: infinite retry loop")
+	}
+}
+
+// План 1.3: генератор подменяется снаружи — сервис берёт коды из него,
+// а не из встроенного случайного.
+func TestShortener_WithGenerator(t *testing.T) {
+	codes := []string{"AAAAA", "BBBBB"}
+	next := 0
+	gen := func() string {
+		c := codes[next]
+		next++
+		return c
+	}
+	s := service.NewShortener(newFakeRepo(), service.WithGenerator(gen))
+
+	for _, want := range codes {
+		got, err := s.Create(context.Background(), "https://go.dev")
+		if err != nil {
+			t.Fatalf("Create: unexpected error: %v", err)
+		}
+		if got != want {
+			t.Errorf("Create = %q, want %q from injected generator", got, want)
+		}
+	}
+}
+
+// WithGenerator(nil) не должен оставить сервис без генератора (иначе panic).
+func TestShortener_WithNilGenerator(t *testing.T) {
+	s := service.NewShortener(newFakeRepo(), service.WithGenerator(nil))
+
+	code, err := s.Create(context.Background(), "https://go.dev")
+	if err != nil {
+		t.Fatalf("Create: unexpected error: %v", err)
+	}
+	if code == "" {
+		t.Error("Create returned empty code: default generator must stay in place")
+	}
+}
+
+// План 1.3: настоящий конфликт на настоящем хранилище. Генератор всегда
+// выдаёт один и тот же код: первый Create его занимает, второй упирается
+// в лимит попыток и получает ErrCodeConflict, а первая ссылка не затирается.
+func TestShortener_CreateConflictWithMemoryRepo(t *testing.T) {
+	ctx := context.Background()
+	const fixed = "AAAAA"
+	s := service.NewShortener(memory.NewStorage(),
+		service.WithGenerator(func() string { return fixed }))
+
+	code, err := s.Create(ctx, "https://first.example")
+	if err != nil {
+		t.Fatalf("first Create: unexpected error: %v", err)
+	}
+	if code != fixed {
+		t.Fatalf("first Create = %q, want %q", code, fixed)
+	}
+
+	code, err = s.Create(ctx, "https://second.example")
+	if !errors.Is(err, domain.ErrCodeConflict) {
+		t.Fatalf("second Create: got %v, want %v", err, domain.ErrCodeConflict)
+	}
+	if code != "" {
+		t.Errorf("second Create code = %q, want empty on error", code)
+	}
+
+	got, err := s.Get(ctx, fixed)
+	if err != nil || got != "https://first.example" {
+		t.Errorf("Get(%q) = %q, %v; want %q, nil: conflict must not overwrite existing link",
+			fixed, got, err, "https://first.example")
+	}
+}
+
+// Отменённый запрос не должен ходить в хранилище: клиент ушёл —
+// генерировать и сохранять коды бессмысленно.
+func TestShortener_CreateCanceledContext(t *testing.T) {
+	repo := newFakeRepo()
+	s := service.NewShortener(repo)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	code, err := s.Create(ctx, "https://go.dev")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v, want %v", err, context.Canceled)
+	}
+	if code != "" {
+		t.Errorf("code = %q, want empty on error", code)
+	}
+	if repo.saveCalls != 0 {
+		t.Errorf("Save calls = %d, want 0: canceled request must not reach storage", repo.saveCalls)
 	}
 }
 

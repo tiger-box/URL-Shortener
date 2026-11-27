@@ -28,31 +28,72 @@ const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ" +
 	"abcdefghjkmnpqrstuvwxyz" +
 	"23456789"
 
-// codeLen — длина короткого кода.
-const codeLen = 5
+const (
+	// codeLen — длина короткого кода. 55⁵ ≈ 503 млн вариантов; когда
+	// заполнение станет заметным (повторы учащаются), длину увеличивают на 1.
+	codeLen = 5
+
+	// maxAttempts — сколько раз Create пробует новый код, если сгенерированный
+	// уже занят. Без лимита при заполненном хранилище запрос зависнет навсегда.
+	// При заполнении 50% вероятность 10 неудач подряд — около 0,1%.
+	maxAttempts = 10
+)
+
+// CodeGenerator возвращает кандидата в короткие коды.
+// Уникальность не гарантируется: занятость кода проверяет репозиторий.
+// Реализация должна быть безопасна для вызова из нескольких горутин.
+type CodeGenerator func() string
+
+// Option настраивает Shortener при создании.
+type Option func(*Shortener)
+
+// WithGenerator подменяет генератор кодов (например, на предсказуемый в тестах).
+// nil игнорируется — остаётся генератор по умолчанию.
+func WithGenerator(gen CodeGenerator) Option {
+	return func(s *Shortener) {
+		if gen != nil {
+			s.generate = gen
+		}
+	}
+}
 
 // Shortener создаёт короткие ссылки и работает с ними.
 // Безопасен для одновременного использования из нескольких горутин,
 // если таким же является репозиторий.
 type Shortener struct {
-	repo repository
+	repo     repository
+	generate CodeGenerator
 }
 
 // NewShortener создаёт сервис поверх переданного репозитория.
-func NewShortener(repo repository) *Shortener {
-	return &Shortener{repo: repo}
+// По умолчанию коды случайные; поведение меняется через опции.
+func NewShortener(repo repository, opts ...Option) *Shortener {
+	s := &Shortener{
+		repo:     repo,
+		generate: generateCode,
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Create сохраняет url под новым случайным кодом и возвращает этот код.
 // Пустой url — domain.ErrInvalidURL. Если сгенерированный код занят,
-// генерирует новый и пробует снова.
+// генерирует новый и пробует снова, но не больше maxAttempts раз;
+// после этого — domain.ErrCodeConflict. Перед каждой попыткой проверяет ctx:
+// отменённый запрос возвращает ошибку контекста и не обращается к хранилищу.
 func (s *Shortener) Create(ctx context.Context, url string) (string, error) {
 	if url == "" {
 		return "", fmt.Errorf("create short url: %w", domain.ErrInvalidURL)
 	}
 
-	for {
-		code := generateCode()
+	for range maxAttempts {
+		if err := ctx.Err(); err != nil {
+			return "", fmt.Errorf("create short url: %w", err)
+		}
+
+		code := s.generate()
 		err := s.repo.Save(ctx, code, url)
 
 		if err == nil {
@@ -65,6 +106,8 @@ func (s *Shortener) Create(ctx context.Context, url string) (string, error) {
 
 		return "", fmt.Errorf("create short url: %w", err)
 	}
+
+	return "", fmt.Errorf("create short url: %w", domain.ErrCodeConflict)
 }
 
 // Get возвращает исходный URL по короткому коду.
@@ -97,7 +140,9 @@ func (s *Shortener) Delete(ctx context.Context, code string) error {
 	return nil
 }
 
-// generateCode возвращает случайный код длины codeLen из алфавита chars.
+// generateCode — генератор по умолчанию: случайный код длины codeLen
+// из алфавита chars. Глобальные функции math/rand/v2 безопасны
+// для конкурентного вызова и не требуют ручного seed.
 func generateCode() string {
 	var builder strings.Builder
 	for range codeLen {
