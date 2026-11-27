@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/tiger-box/URL-Shortener/internal"
+	"github.com/tiger-box/URL-Shortener/internal/repository/memory"
+	"github.com/tiger-box/URL-Shortener/internal/service"
 )
 
 func main() {
@@ -17,8 +19,9 @@ func main() {
 	fmt.Println("==============")
 
 	var number int
-
-	shortener := internal.NewURLShortener()
+	ctx := context.Background()
+	memRepo := memory.NewStorage()
+	shortener := service.NewShortener(memRepo)
 
 	fmt.Println("number choice")
 	for {
@@ -32,21 +35,21 @@ func main() {
 			var url string
 			fmt.Print("Enter url: ")
 			fmt.Scan(&url)
-			create, err := shortener.Create(url)
+			short, err := shortener.Create(ctx, url)
 
 			if err != nil {
 				fmt.Println("error", err)
 				continue
 			}
 
-			fmt.Println(create)
+			fmt.Println(short)
 
 		case 2:
 			fmt.Println("enter short url")
 
-			var id string
-			fmt.Scan(&id)
-			url, err := shortener.Get(id)
+			var short string
+			fmt.Scan(&short)
+			url, err := shortener.Get(ctx, short)
 
 			if err != nil {
 				fmt.Println("error", err)
@@ -58,9 +61,9 @@ func main() {
 		case 3:
 			fmt.Println("enter short url")
 
-			var id string
-			fmt.Scan(&id)
-			err := shortener.Delete(id)
+			var short string
+			fmt.Scan(&short)
+			err := shortener.Delete(ctx, short)
 
 			if err != nil {
 				fmt.Println("error", err)

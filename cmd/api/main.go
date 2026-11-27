@@ -10,9 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tiger-box/URL-Shortener/internal"
 	"github.com/tiger-box/URL-Shortener/internal/config"
 	"github.com/tiger-box/URL-Shortener/internal/handler"
+	"github.com/tiger-box/URL-Shortener/internal/repository/memory"
+	"github.com/tiger-box/URL-Shortener/internal/service"
 )
 
 func main() {
@@ -28,8 +29,9 @@ func main() {
 	}
 	lvl.Set(cfg.LogLevel)
 
-	shortener := internal.NewURLShortener()
-	urlHandler := handler.NewURL(shortener, logger)
+	memRepo := memory.NewStorage()
+	shortener := service.NewShortener(memRepo)
+	urlHandler := handler.NewURL(logger, shortener)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", handler.Health)

@@ -8,16 +8,19 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/tiger-box/URL-Shortener/internal"
+	"github.com/tiger-box/URL-Shortener/internal/service"
 )
 
 type URL struct {
-	shortener *internal.URLShortener
 	logger    *slog.Logger
+	shortener *service.Shortener
 }
 
-func NewURL(shortener *internal.URLShortener, logger *slog.Logger) *URL {
-	return &URL{shortener: shortener, logger: logger}
+func NewURL(logger *slog.Logger, shortener *service.Shortener) *URL {
+	return &URL{
+		logger:    logger,
+		shortener: shortener,
+	}
 }
 
 type shorterRequest struct {
@@ -38,14 +41,14 @@ func (h *URL) GetShorter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url, err := parseURL(req.URL)
-	if url == "" {
+	originalURL, err := parseURL(req.URL)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid URL")
 		h.logger.WarnContext(ctx, "bad request", "err", err)
 		return
 	}
 
-	short, err := h.shortener.Create(url)
+	short, err := h.shortener.Create(ctx, originalURL)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal server error")
 		h.logger.ErrorContext(ctx, "failded create short url", "err", err)
@@ -71,14 +74,14 @@ func (h *URL) GetURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url, err := h.shortener.Get(code)
+	originalURL, err := h.shortener.Get(ctx, code)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "url not found")
 		h.logger.ErrorContext(ctx, "error url", "err", err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, urlResponse{URL: url})
+	writeJSON(w, http.StatusOK, urlResponse{URL: originalURL})
 }
 
 func parseURL(rawURL string) (string, error) {
