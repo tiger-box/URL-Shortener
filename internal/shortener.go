@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"math/rand/v2"
 	"strings"
 	"sync"
@@ -24,7 +23,7 @@ func (s *URLShortener) Create(OriginalURL string) (string, error) {
 	defer s.mu.Unlock()
 
 	if len(OriginalURL) == 0 {
-		return "", fmt.Errorf("shortener: len url empty")
+		return "", domain.ErrInvalidURL
 	}
 
 	//rand.Seed(time.Now().UnixNano())
