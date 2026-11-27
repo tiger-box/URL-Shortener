@@ -15,18 +15,20 @@ import (
 // fakeRepo — поддельный репозиторий для тестов сервиса.
 // Хранит данные в map и умеет «притворяться» занятым или сломанным.
 type fakeRepo struct {
-	data      map[string]string
+	data      map[string]domain.URL
 	conflicts int   // сколько первых Save вернут ErrAlreadyExists
 	saveErr   error // если задано — Save всегда возвращает эту ошибку
 	saveCalls int
+	lastSaved domain.URL // что сервис передал в последний Save
 }
 
 func newFakeRepo() *fakeRepo {
-	return &fakeRepo{data: make(map[string]string)}
+	return &fakeRepo{data: make(map[string]domain.URL)}
 }
 
-func (f *fakeRepo) Save(_ context.Context, code, url string) error {
+func (f *fakeRepo) Save(_ context.Context, u domain.URL) error {
 	f.saveCalls++
+	f.lastSaved = u
 	if f.saveErr != nil {
 		return f.saveErr
 	}
@@ -34,16 +36,16 @@ func (f *fakeRepo) Save(_ context.Context, code, url string) error {
 		f.conflicts--
 		return domain.ErrAlreadyExists
 	}
-	f.data[code] = url
+	f.data[u.Code] = u
 	return nil
 }
 
-func (f *fakeRepo) Get(_ context.Context, code string) (string, error) {
-	url, ok := f.data[code]
+func (f *fakeRepo) Get(_ context.Context, code string) (domain.URL, error) {
+	u, ok := f.data[code]
 	if !ok {
-		return "", domain.ErrNotFound
+		return domain.URL{}, domain.ErrNotFound
 	}
-	return url, nil
+	return u, nil
 }
 
 func (f *fakeRepo) Delete(_ context.Context, code string) error {
@@ -73,6 +75,24 @@ func TestShortener_CreateThenGet(t *testing.T) {
 	}
 	if got != "https://example.com/some/long/path" {
 		t.Errorf("Get(%q) = %q, want %q", code, got, "https://example.com/some/long/path")
+	}
+}
+
+// План 1.4: Create передаёт в репозиторий заполненную запись —
+// Code совпадает с тем, что получил клиент, OriginalURL — с тем, что он прислал.
+// Ловит ошибку «Save(ctx, domain.URL{})»: она компилируется, но теряет данные.
+func TestShortener_CreateSavesFullRecord(t *testing.T) {
+	repo := newFakeRepo()
+	s := service.NewShortener(repo, service.WithGenerator(func() string { return "AAAAA" }))
+
+	code, err := s.Create(context.Background(), "https://go.dev")
+	if err != nil {
+		t.Fatalf("Create: unexpected error: %v", err)
+	}
+
+	want := domain.URL{Code: code, OriginalURL: "https://go.dev"}
+	if repo.lastSaved != want {
+		t.Errorf("saved record = %+v, want %+v", repo.lastSaved, want)
 	}
 }
 
@@ -280,7 +300,7 @@ func TestShortener_CreateStorageError(t *testing.T) {
 func TestShortener_Get(t *testing.T) {
 	ctx := context.Background()
 	repo := newFakeRepo()
-	repo.data["abc12"] = "https://go.dev"
+	repo.data["abc12"] = domain.URL{Code: "abc12", OriginalURL: "https://go.dev"}
 	s := service.NewShortener(repo)
 
 	got, err := s.Get(ctx, "abc12")
@@ -301,7 +321,7 @@ func TestShortener_Get(t *testing.T) {
 func TestShortener_Delete(t *testing.T) {
 	ctx := context.Background()
 	repo := newFakeRepo()
-	repo.data["abc12"] = "https://go.dev"
+	repo.data["abc12"] = domain.URL{Code: "abc12", OriginalURL: "https://go.dev"}
 	s := service.NewShortener(repo)
 
 	if err := s.Delete(ctx, "abc12"); err != nil {

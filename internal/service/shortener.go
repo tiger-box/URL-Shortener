@@ -13,12 +13,13 @@ import (
 	"github.com/tiger-box/URL-Shortener/internal/domain"
 )
 
-// repository — хранилище пар «код → URL», которое нужно сервису.
+// repository — хранилище коротких ссылок (domain.URL), которое нужно сервису.
+// Save берёт ключ из u.Code; Get возвращает запись целиком.
 // Save возвращает domain.ErrAlreadyExists, если код занят;
 // Get и Delete возвращают domain.ErrNotFound, если кода нет.
 type repository interface {
-	Save(ctx context.Context, code string, url string) error
-	Get(ctx context.Context, code string) (string, error)
+	Save(ctx context.Context, u domain.URL) error
+	Get(ctx context.Context, code string) (domain.URL, error)
 	Delete(ctx context.Context, code string) error
 }
 
@@ -94,7 +95,7 @@ func (s *Shortener) Create(ctx context.Context, url string) (string, error) {
 		}
 
 		code := s.generate()
-		err := s.repo.Save(ctx, code, url)
+		err := s.repo.Save(ctx, domain.URL{Code: code, OriginalURL: url})
 
 		if err == nil {
 			return code, nil
@@ -117,12 +118,12 @@ func (s *Shortener) Get(ctx context.Context, code string) (string, error) {
 		return "", fmt.Errorf("get url: %w", domain.ErrNotFound)
 	}
 
-	url, err := s.repo.Get(ctx, code)
+	u, err := s.repo.Get(ctx, code)
 	if err != nil {
 		return "", fmt.Errorf("get url: %w", err)
 	}
 
-	return url, nil
+	return u.OriginalURL, nil
 }
 
 // Delete удаляет короткую ссылку. После удаления Get по этому коду

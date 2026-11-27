@@ -12,20 +12,25 @@ import (
 	"github.com/tiger-box/URL-Shortener/internal/repository/memory"
 )
 
+// goDev — типовая запись для тестов.
+var goDev = domain.URL{Code: "abc12", OriginalURL: "https://go.dev"}
+
+// Get отдаёт запись целиком — с теми же Code и OriginalURL, что сохранили.
+// Структура из строк сравнивается через ==.
 func TestStorage_SaveAndGet(t *testing.T) {
 	ctx := context.Background()
 	s := memory.NewStorage()
 
-	if err := s.Save(ctx, "abc12", "https://go.dev"); err != nil {
+	if err := s.Save(ctx, goDev); err != nil {
 		t.Fatalf("Save: unexpected error: %v", err)
 	}
 
-	got, err := s.Get(ctx, "abc12")
+	got, err := s.Get(ctx, goDev.Code)
 	if err != nil {
 		t.Fatalf("Get: unexpected error: %v", err)
 	}
-	if got != "https://go.dev" {
-		t.Errorf("Get = %q, want %q", got, "https://go.dev")
+	if got != goDev {
+		t.Errorf("Get = %+v, want %+v", got, goDev)
 	}
 }
 
@@ -33,28 +38,34 @@ func TestStorage_SaveDuplicate(t *testing.T) {
 	ctx := context.Background()
 	s := memory.NewStorage()
 
-	if err := s.Save(ctx, "abc12", "https://go.dev"); err != nil {
+	if err := s.Save(ctx, goDev); err != nil {
 		t.Fatalf("first Save: unexpected error: %v", err)
 	}
 
-	err := s.Save(ctx, "abc12", "https://example.com")
+	err := s.Save(ctx, domain.URL{Code: "abc12", OriginalURL: "https://example.com"})
 	if !errors.Is(err, domain.ErrAlreadyExists) {
 		t.Fatalf("second Save: got %v, want %v", err, domain.ErrAlreadyExists)
 	}
 
 	// Первая запись не должна быть перезаписана.
-	got, _ := s.Get(ctx, "abc12")
-	if got != "https://go.dev" {
-		t.Errorf("Get after duplicate Save = %q, want %q", got, "https://go.dev")
+	got, _ := s.Get(ctx, goDev.Code)
+	if got != goDev {
+		t.Errorf("Get after duplicate Save = %+v, want %+v", got, goDev)
 	}
 }
 
+// Ненайденная запись: ErrNotFound и пустая структура (zero value),
+// а не «полузаполненная» — вызывающий не должен случайно получить мусор.
 func TestStorage_NotFound(t *testing.T) {
 	ctx := context.Background()
 	s := memory.NewStorage()
 
-	if _, err := s.Get(ctx, "nope1"); !errors.Is(err, domain.ErrNotFound) {
+	got, err := s.Get(ctx, "nope1")
+	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Get missing: got %v, want %v", err, domain.ErrNotFound)
+	}
+	if got != (domain.URL{}) {
+		t.Errorf("Get missing = %+v, want zero domain.URL", got)
 	}
 	if err := s.Delete(ctx, "nope1"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Delete missing: got %v, want %v", err, domain.ErrNotFound)
@@ -65,13 +76,13 @@ func TestStorage_Delete(t *testing.T) {
 	ctx := context.Background()
 	s := memory.NewStorage()
 
-	if err := s.Save(ctx, "abc12", "https://go.dev"); err != nil {
+	if err := s.Save(ctx, goDev); err != nil {
 		t.Fatalf("Save: unexpected error: %v", err)
 	}
-	if err := s.Delete(ctx, "abc12"); err != nil {
+	if err := s.Delete(ctx, goDev.Code); err != nil {
 		t.Fatalf("Delete: unexpected error: %v", err)
 	}
-	if _, err := s.Get(ctx, "abc12"); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := s.Get(ctx, goDev.Code); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("Get after Delete: got %v, want %v", err, domain.ErrNotFound)
 	}
 }
@@ -89,7 +100,7 @@ func TestStorage_ConcurrentAccess(t *testing.T) {
 		code := fmt.Sprintf("c%04d", i)
 		go func() {
 			defer wg.Done()
-			if err := s.Save(ctx, code, "https://go.dev"); err != nil {
+			if err := s.Save(ctx, domain.URL{Code: code, OriginalURL: "https://go.dev"}); err != nil {
 				t.Errorf("Save %s: %v", code, err)
 			}
 		}()
@@ -121,7 +132,7 @@ func TestStorage_ConcurrentSaveSameCode(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := s.Save(ctx, "same1", fmt.Sprintf("https://site%d.com", i))
+			err := s.Save(ctx, domain.URL{Code: "same1", OriginalURL: fmt.Sprintf("https://site%d.com", i)})
 			switch {
 			case err == nil:
 				ok.Add(1)
